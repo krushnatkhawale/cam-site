@@ -78,10 +78,10 @@ def home():
 @app.route("/gallery")
 def gallery():
     images = get_images()
-    imgs = "".join(f'<img src="/img/{f}" alt="{f}">' for f in images)
+    imgs = "".join(f'<img src="/img/{f}" alt="{f}" data-fname="{f}">' for f in images)
     # Capture button for gallery page
     capture_button = "<p><button id=\"capture-btn\">Capture current</button> <span id=\"capture-msg\"></span></p>"
-    # JS for capture action (reloads page when capture succeeds)
+    # JS for capture action (triggers fetchImages when capture succeeds)
     capture_js = """
     <script>
     document.getElementById('capture-btn').addEventListener('click',async()=>{
@@ -90,7 +90,7 @@ def gallery():
         try{
             const res=await fetch('/capture',{method:'POST'});
             const j=await res.json();
-            if(res.ok){document.getElementById('capture-msg').textContent='Done';location.reload();}
+            if(res.ok){document.getElementById('capture-msg').textContent='Done';if(window.fetchImages) window.fetchImages();}
             else{document.getElementById('capture-msg').textContent='Error: '+(j.error||res.statusText);btn.disabled=false;}
         }catch(e){document.getElementById('capture-msg').textContent='Error: '+e;btn.disabled=false;}
     });
@@ -106,7 +106,31 @@ def gallery():
     });
     </script>
     """ if len(images)>12 else ""
-    body = f"<h1>Gallery ({len(images)})</h1>{capture_button}<div class='gallery'>{imgs}</div>{infinite_js}{capture_js}"
+
+    # Polling JS to fetch new images and append them without reloading
+    poll_js = """
+    <script>
+    window.fetchImages = async function(){
+        try{
+            const res = await fetch('/images');
+            if(!res.ok) return;
+            const data = await res.json();
+            const gallery = document.getElementById('gallery');
+            if(!gallery) return;
+            const existing = new Set(Array.from(gallery.querySelectorAll('img')).map(i=>i.getAttribute('data-fname')));
+            data.images.forEach(fname=>{
+                if(!existing.has(fname)){
+                    const html = `<img src="/img/${fname}" alt="${fname}" data-fname="${fname}">`;
+                    gallery.insertAdjacentHTML('afterbegin', html);
+                }
+            });
+        }catch(e){console.log('fetchImages error', e)}
+    }
+    // fetchImages will be invoked only when a capture completes successfully
+    </script>
+    """
+
+    body = f"<h1>Gallery ({len(images)})</h1>{capture_button}<div id='gallery' class='gallery'>{imgs}</div>{infinite_js}{capture_js}{poll_js}"
     return render_template_string(layout("Gallery", body))
 
 @app.route("/about")
@@ -134,6 +158,11 @@ def capture():
         return jsonify({'ok': True, 'path': f'/img/{filename}', 'filename': filename})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+# JSON endpoint returning list of images
+@app.route('/images')
+def images_api():
+    return jsonify({'images': get_images()})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5005, debug=False)
