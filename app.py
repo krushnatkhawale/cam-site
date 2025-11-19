@@ -78,6 +78,7 @@ def home():
 
 @app.route("/gallery")
 def gallery():
+    images = get_images()
     imgs = "".join(f'<img src="/img/{f}" alt="{f}">' for f in images)
     infinite_js = """
     <script>
