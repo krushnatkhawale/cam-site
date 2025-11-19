@@ -78,6 +78,23 @@ def home():
 def gallery():
     images = get_images()
     imgs = "".join(f'<img src="/img/{f}" alt="{f}">' for f in images)
+    # Capture button for gallery page
+    capture_button = "<p><button id=\"capture-btn\">Capture current</button> <span id=\"capture-msg\"></span></p>"
+    # JS for capture action (reloads page when capture succeeds)
+    capture_js = """
+    <script>
+    document.getElementById('capture-btn').addEventListener('click',async()=>{
+        const btn=document.getElementById('capture-btn');
+        btn.disabled=true;document.getElementById('capture-msg').textContent='Capturing...';
+        try{
+            const res=await fetch('/capture',{method:'POST'});
+            const j=await res.json();
+            if(res.ok){document.getElementById('capture-msg').textContent='Done';location.reload();}
+            else{document.getElementById('capture-msg').textContent='Error: '+(j.error||res.statusText);btn.disabled=false;}
+        }catch(e){document.getElementById('capture-msg').textContent='Error: '+e;btn.disabled=false;}
+    });
+    </script>
+    """
     infinite_js = """
     <script>
     let i=12; const imgs = document.querySelectorAll('.gallery img');
@@ -88,7 +105,8 @@ def gallery():
     });
     </script>
     """ if len(images)>12 else ""
-    return render_template_string(layout("Gallery", f"<h1>Gallery ({len(images)})</h1><div class='gallery'>{imgs}</div>{infinite_js}"))
+    body = f"<h1>Gallery ({len(images)})</h1>{capture_button}<div class='gallery'>{imgs}</div>{infinite_js}{capture_js}"
+    return render_template_string(layout("Gallery", body))
 
 @app.route("/about")
 def about():
