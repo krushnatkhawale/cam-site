@@ -72,7 +72,7 @@ layout = lambda title, body: f"""
 def home():
     body = "<h1>Hello from Raspberry Pi!</h1><p>Your Flask site is running perfectly.</p>"
     body += "<p><button id=\"capture-btn\">Capture current</button> <span id=\"capture-msg\"></span></p>"
-    body += "<script>document.getElementById('capture-btn').addEventListener('click',async()=>{const btn=document.getElementById('capture-btn');btn.disabled=true;document.getElementById('capture-msg').textContent='Capturing...';try{const res=await fetch('/capture',{method:'POST'});const j=await res.json();if(res.ok){document.getElementById('capture-msg').textContent='Done';setTimeout(()=>location.reload(),700);}else{document.getElementById('capture-msg').textContent='Error: '+(j.error||res.statusText);btn.disabled=false;}}catch(e){document.getElementById('capture-msg').textContent='Error: '+e;btn.disabled=false;}});</script>"
+    body += "<script>document.getElementById('capture-btn').addEventListener('click',async()=>{const btn=document.getElementById('capture-btn');btn.disabled=true;document.getElementById('capture-msg').textContent='Capturing...';try{const res=await fetch('/capture',{method:'POST'});const j=await res.json();if(res.ok){document.getElementById('capture-msg').textContent='Done';setTimeout(()=>{document.getElementById('capture-msg').textContent='';btn.disabled=false;},700);}else{document.getElementById('capture-msg').textContent='Error: '+(j.error||res.statusText);btn.disabled=false;}}catch(e){document.getElementById('capture-msg').textContent='Error: '+e;btn.disabled=false;}});</script>"
     return render_template_string(layout("Home", body))
 
 @app.route("/gallery")
@@ -90,7 +90,11 @@ def gallery():
         try{
             const res=await fetch('/capture',{method:'POST'});
             const j=await res.json();
-            if(res.ok){document.getElementById('capture-msg').textContent='Done';if(window.fetchImages) window.fetchImages();}
+            if(res.ok){
+                document.getElementById('capture-msg').textContent='Done';
+                if(window.fetchImages) await window.fetchImages();
+                setTimeout(()=>{document.getElementById('capture-msg').textContent='';btn.disabled=false;},700);
+            }
             else{document.getElementById('capture-msg').textContent='Error: '+(j.error||res.statusText);btn.disabled=false;}
         }catch(e){document.getElementById('capture-msg').textContent='Error: '+e;btn.disabled=false;}
     });
