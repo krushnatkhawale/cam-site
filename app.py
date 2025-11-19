@@ -28,6 +28,7 @@ except ImportError:
 
 import os
 import subprocess
+import datetime
 
 app = Flask(__name__, static_folder=None)
 IMAGE_DIR = "static/gallery"
@@ -116,19 +117,21 @@ def about():
 def serve_image(filename):
     return send_from_directory(IMAGE_DIR, filename)
 
-# Capture endpoint that runs rpicam-still and saves to img1.jpg
+# Capture endpoint that runs rpicam-still and saves to a timestamped filename
 @app.route('/capture', methods=['POST'])
 def capture():
     global images
     try:
         os.makedirs(IMAGE_DIR, exist_ok=True)
-        target = os.path.join(IMAGE_DIR, 'img1.jpg')
+        # create a unique filename using current timestamp
+        filename = datetime.datetime.now().strftime('img_%Y%m%d_%H%M%S.jpg')
+        target = os.path.join(IMAGE_DIR, filename)
         # Run the rpicam-still command to capture an image
         res = subprocess.run(['rpicam-still', '-o', target], capture_output=True, text=True, timeout=30)
         if res.returncode != 0:
             return jsonify({'ok': False, 'error': res.stderr.strip() or 'rpicam-still failed'}), 500
         images = get_images()
-        return jsonify({'ok': True, 'path': '/img/img1.jpg'})
+        return jsonify({'ok': True, 'path': f'/img/{filename}', 'filename': filename})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
