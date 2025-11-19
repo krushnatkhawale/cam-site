@@ -43,98 +43,38 @@ def get_images():
 
 images = get_images()
 
-CSS = """
-<style>
-    body{font-family:system-ui,sans-serif;margin:0;background:#fafafa;color:#222;line-height:1.6}
-    nav{background:white;padding:1rem;box-shadow:0 2px 10px rgba(0,0,0,.1);position:sticky;top:0}
-    nav a{margin:0 1rem;color:#0066ff;text-decoration:none;font-weight:600}
-    main{max-width:1100px;margin:2rem auto;padding:0 1rem}
-    h1{color:#0066ff}
-    .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem;padding:2rem 0}
-    .gallery img{width:100%;height:260px;object-fit:cover;border-radius:12px;
-                 box-shadow:0 4px 20px rgba(0,0,0,.15);transition:.4s;loading:lazy}
-    .gallery img:hover{transform:scale(1.06);box-shadow:0 20px 40px rgba(0,0,0,.25)}
-    footer{text-align:center;padding:3rem;color:#777}
-</style>
-"""
-
 layout = lambda title, body: f"""
 <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title}</title>{CSS}</head>
+<title>{title}</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
 <body>
 <nav><a href="/">Home</a> <a href="/gallery">Gallery</a> <a href="/about">About</a></nav>
 <main>{body}</main>
 <footer>© 2025 • Raspberry Pi + Flask • {len(images)} photos</footer>
+<script src="/static/js/app.js"></script>
 </body></html>
 """
+
+# Serve static files from the local static/ folder
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
 
 @app.route("/")
 def home():
     body = "<h1>Hello from Raspberry Pi!</h1><p>Your Flask site is running perfectly.</p>"
+    # simple button and message span; JS lives in static/js/app.js
     body += "<p><button id=\"capture-btn\">Capture current</button> <span id=\"capture-msg\"></span></p>"
-    body += "<script>document.getElementById('capture-btn').addEventListener('click',async()=>{const btn=document.getElementById('capture-btn');btn.disabled=true;document.getElementById('capture-msg').textContent='Capturing...';try{const res=await fetch('/capture',{method:'POST'});const j=await res.json();if(res.ok){document.getElementById('capture-msg').textContent='Done';setTimeout(()=>{document.getElementById('capture-msg').textContent='';btn.disabled=false;},700);}else{document.getElementById('capture-msg').textContent='Error: '+(j.error||res.statusText);btn.disabled=false;}}catch(e){document.getElementById('capture-msg').textContent='Error: '+e;btn.disabled=false;}});</script>"
     return render_template_string(layout("Home", body))
 
 @app.route("/gallery")
 def gallery():
     images = get_images()
     imgs = "".join(f'<img src="/img/{f}" alt="{f}" data-fname="{f}">' for f in images)
-    # Capture button for gallery page
+    # Capture button for gallery page; JS handles capture and dynamic updates
     capture_button = "<p><button id=\"capture-btn\">Capture current</button> <span id=\"capture-msg\"></span></p>"
-    # JS for capture action (triggers fetchImages when capture succeeds)
-    capture_js = """
-    <script>
-    document.getElementById('capture-btn').addEventListener('click',async()=>{
-        const btn=document.getElementById('capture-btn');
-        btn.disabled=true;document.getElementById('capture-msg').textContent='Capturing...';
-        try{
-            const res=await fetch('/capture',{method:'POST'});
-            const j=await res.json();
-            if(res.ok){
-                document.getElementById('capture-msg').textContent='Done';
-                if(window.fetchImages) await window.fetchImages();
-                setTimeout(()=>{document.getElementById('capture-msg').textContent='';btn.disabled=false;},700);
-            }
-            else{document.getElementById('capture-msg').textContent='Error: '+(j.error||res.statusText);btn.disabled=false;}
-        }catch(e){document.getElementById('capture-msg').textContent='Error: '+e;btn.disabled=false;}
-    });
-    </script>
-    """
-    infinite_js = """
-    <script>
-    let i=12; const imgs = document.querySelectorAll('.gallery img');
-    window.addEventListener('scroll',()=>{
-        if(window.innerHeight + window.scrollY >= document.body.offsetHeight - 800 && i<imgs.length){
-            for(let j=0;j<12 && i<imgs.length;j++,i++) imgs[i].style.opacity=1;
-        }
-    });
-    </script>
-    """ if len(images)>12 else ""
-
-    # Polling JS to fetch new images and append them without reloading
-    poll_js = """
-    <script>
-    window.fetchImages = async function(){
-        try{
-            const res = await fetch('/images');
-            if(!res.ok) return;
-            const data = await res.json();
-            const gallery = document.getElementById('gallery');
-            if(!gallery) return;
-            const existing = new Set(Array.from(gallery.querySelectorAll('img')).map(i=>i.getAttribute('data-fname')));
-            data.images.forEach(fname=>{
-                if(!existing.has(fname)){
-                    const html = `<img src="/img/${fname}" alt="${fname}" data-fname="${fname}">`;
-                    gallery.insertAdjacentHTML('afterbegin', html);
-                }
-            });
-        }catch(e){console.log('fetchImages error', e)}
-    }
-    // fetchImages will be invoked only when a capture completes successfully
-    </script>
-    """
-
-    body = f"<h1>Gallery ({len(images)})</h1>{capture_button}<div id='gallery' class='gallery'>{imgs}</div>{infinite_js}{capture_js}{poll_js}"
+    body = f"<h1>Gallery ({len(images)})</h1>{capture_button}<div id='gallery' class='gallery'>{imgs}</div>"
     return render_template_string(layout("Gallery", body))
 
 @app.route("/about")
