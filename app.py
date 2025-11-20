@@ -29,10 +29,36 @@ except ImportError:
 import os
 import subprocess
 import datetime
+import threading
+import time
 
 app = Flask(__name__, static_folder=None)
 IMAGE_DIR = "static/gallery"
 os.makedirs(IMAGE_DIR, exist_ok=True)
+
+AUTO_DIR = "static/auto-gallery"
+os.makedirs(AUTO_DIR, exist_ok=True)
+
+# Background automatic capture loop (runs every 5 minutes)
+def auto_capture_loop(interval_seconds=300):
+    """Daemon loop: capture images every `interval_seconds` seconds into AUTO_DIR.
+    Uses rpicam-still to perform captures. This function is safe to run as a
+    background thread. Exceptions are caught and logged to stderr to avoid
+    crashing the thread.
+    """
+    while True:
+        try:
+            filename = datetime.datetime.now().strftime('auto_%Y%m%d_%H%M%S.jpg')
+            target = os.path.join(AUTO_DIR, filename)
+            # run capture; ignore stdout, but record errors
+            res = subprocess.run(['rpicam-still', '-o', target], capture_output=True, text=True, timeout=60)
+            if res.returncode != 0:
+                print(f"auto-capture failed: {res.stderr.strip()}", file=sys.stderr)
+        except Exception as e:
+            # log and continue
+            print(f"auto-capture exception: {e}", file=sys.stderr)
+        # sleep until next capture
+        time.sleep(interval_seconds)
 
 # Auto-discover images
 def get_images():
@@ -109,6 +135,17 @@ def images_api():
     return jsonify({'images': get_images()})
 
 if __name__ == "__main__":
+    # Start background auto-capture thread only in the main process
+    # Avoid starting it twice when Flask's debug reloader forks processes.
+    try:
+        import sys
+        if not (hasattr(sys, 'argv') and any(a.startswith('--extra') for a in sys.argv)):
+            t = threading.Thread(target=auto_capture_loop, args=(300,), daemon=True)
+            t.start()
+    except Exception:
+        # best-effort: if thread fails to start, continue to run the app
+        pass
+
     app.run(host="0.0.0.0", port=5005, debug=False)
 #EOF
 
